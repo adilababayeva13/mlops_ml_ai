@@ -5,26 +5,20 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels:
-      app: minio
+    matchLabels: { app: minio }
   template:
     metadata:
-      labels:
-        app: minio
+      labels: { app: minio }
     spec:
       containers:
         - name: minio
           image: minio/minio:latest
-          args:
-            - server
-            - /data
-            - "--console-address"
-            - ":9001"
+          args: ["server", "/data", "--console-address", ":9001"]
           env:
             - name: MINIO_ROOT_USER
-              value: minioadmin
+              value: minio
             - name: MINIO_ROOT_PASSWORD
-              value: minioadmin123
+              value: minio12345
           ports:
             - containerPort: 9000
             - containerPort: 9001
@@ -34,8 +28,7 @@ kind: Service
 metadata:
   name: minio
 spec:
-  selector:
-    app: minio
+  selector: { app: minio }
   ports:
     - name: api
       port: 9000

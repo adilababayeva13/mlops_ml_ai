@@ -5,31 +5,48 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels:
-      app: mlflow
+    matchLabels: { app: mlflow }
   template:
     metadata:
-      labels:
-        app: mlflow
+      labels: { app: mlflow }
     spec:
       containers:
         - name: mlflow
           image: asia-east1-docker.pkg.dev/newtest-414721/mlops/mlflow:latest
-          args:
-            - mlflow
-            - server
-            - --backend-store-uri=postgresql://admin:admin123@postgres:5432/what_to_eat
-            - --default-artifact-root=s3://mlflow
-            - --host=0.0.0.0
-            - --port=5000
-          env:
-            - name: AWS_ACCESS_KEY_ID
-              value: minioadmin
-            - name: AWS_SECRET_ACCESS_KEY
-              value: minioadmin123
-            - name: MLFLOW_S3_ENDPOINT_URL
-              value: http://minio:9000
-            - name: AWS_DEFAULT_REGION
-              value: us-east-1
           ports:
             - containerPort: 5000
+          env:
+            - name: MLFLOW_TRACKING_URI
+              value: http://0.0.0.0:5000
+            - name: BACKEND_STORE_URI
+              value: postgresql://whattoeat:whattoeatpass@postgres:5432/whattoeat
+            - name: ARTIFACT_ROOT
+              value: s3://mlflow/
+            - name: MLFLOW_S3_ENDPOINT_URL
+              value: http://minio:9000
+            - name: AWS_ACCESS_KEY_ID
+              value: minio
+            - name: AWS_SECRET_ACCESS_KEY
+              value: minio12345
+            - name: AWS_DEFAULT_REGION
+              value: us-east-1
+          command: ["mlflow"]
+          args:
+            [
+              "server",
+              "--host", "0.0.0.0",
+              "--port", "5000",
+              "--backend-store-uri", "postgresql://whattoeat:whattoeatpass@postgres:5432/whattoeat",
+              "--default-artifact-root", "s3://mlflow/"
+            ]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow
+spec:
+  selector: { app: mlflow }
+  ports:
+    - port: 5000
+      targetPort: 5000
+  type: ClusterIP

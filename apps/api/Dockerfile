@@ -1,28 +1,19 @@
-FROM python:3.13-slim
-
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# system deps
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential curl \
     && rm -rf /var/lib/apt/lists/*
 
-# copy pyproject files FIRST (cache-friendly)
-COPY pyproject.toml ./
-COPY poetry.lock* ./
+# install deps first for cache
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# install deps (no virtualenv inside container)
-RUN pip install --upgrade pip \
-    && pip install poetry \
-    && poetry config virtualenvs.create false \
-    && poetry install --no-interaction --no-ansi --only main --no-root
-
-
-# copy application code
-COPY apps ./apps
-COPY data ./data
+# project code
+COPY apps /app/apps
+COPY mlops /app/mlops
+COPY data /app/data
 
 EXPOSE 8000
-
 CMD ["uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

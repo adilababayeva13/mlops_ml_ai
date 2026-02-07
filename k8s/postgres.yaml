@@ -5,23 +5,21 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels:
-      app: postgres
+    matchLabels: { app: postgres }
   template:
     metadata:
-      labels:
-        app: postgres
+      labels: { app: postgres }
     spec:
       containers:
         - name: postgres
           image: postgres:15
           env:
             - name: POSTGRES_DB
-              value: what_to_eat
+              value: whattoeat
             - name: POSTGRES_USER
-              value: admin
+              value: whattoeat
             - name: POSTGRES_PASSWORD
-              value: admin123
+              value: whattoeatpass
           ports:
             - containerPort: 5432
 ---
@@ -30,8 +28,7 @@ kind: Service
 metadata:
   name: postgres
 spec:
-  selector:
-    app: postgres
+  selector: { app: postgres }
   ports:
     - port: 5432
       targetPort: 5432
