@@ -1,94 +1,114 @@
 import os
-import mlflow
-import mlflow.sklearn
 import pandas as pd
-import numpy as np
+import mlflow
 from mlflow.tracking import MlflowClient
 
-os.environ.setdefault("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
-os.environ.setdefault("MLFLOW_S3_ENDPOINT_URL", "http://127.0.0.1:9000")
-os.environ.setdefault("AWS_ACCESS_KEY_ID", "minio")
-os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "minio12345")
-os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
-
-
-# --------------------------------------------------
-# MLflow setup
-# --------------------------------------------------
-MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
-mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+# =========================
+# Configuration
+# =========================
 
 MODEL_NAME = "meal_similarity_recommender"
+MLFLOW_TRACKING_URI = os.getenv(
+    "MLFLOW_TRACKING_URI",
+    "http://mlflow:5000",  # works inside k8s
+)
+
+mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
 _client = MlflowClient()
+
 _model = None
-_model_version = None
-_model_run_id = None
+_model_version = "unregistered"
 
-# --------------------------------------------------
-# Model loader
-# --------------------------------------------------
-def get_model():
-    """
-    Loads the latest sklearn model AND fetches its MLflow run_id.
-    Cached in memory after first load.
-    """
-    global _model, _model_version, _model_run_id
 
-    if _model is None:
-        # 1. Fetch latest registered model version
+# =========================
+# Model loading
+# =========================
+
+def _load_latest_model_fallback():
+    """
+    Load model in this priority order:
+
+    1) MLflow Model Registry (if exists)
+    2) Latest MLflow run artifact (fallback)
+
+    This works even when:
+    - Registry is disabled
+    - Python 3.13 is used
+    """
+    global _model, _model_version
+
+    # ---- 1. Try registry (safe try) ----
+    try:
         versions = _client.get_latest_versions(MODEL_NAME)
-        if not versions:
-            raise RuntimeError(f"No registered versions for model '{MODEL_NAME}'")
+        if versions:
+            v = versions[0]
+            _model = mlflow.pyfunc.load_model(
+                model_uri=f"models:/{MODEL_NAME}/{v.version}"
+            )
+            _model_version = v.run_id
+            return
+    except Exception:
+        pass  # registry not available → fallback
 
-        latest = versions[0]  # highest version number
-        _model_version = latest.version
-        _model_run_id = latest.run_id
+    # ---- 2. Fallback: latest run artifact ----
+    runs = mlflow.search_runs(
+        order_by=["start_time DESC"],
+        max_results=1,
+    )
 
-        # 2. Load sklearn pipeline (for predict_proba)
-        _model = mlflow.sklearn.load_model(
-            model_uri=f"models:/{MODEL_NAME}/{_model_version}"
+    if runs.empty:
+        raise RuntimeError(
+            "No MLflow runs found. Train a model before serving predictions."
         )
 
-    return _model, _model_version, _model_run_id
+    run_id = runs.iloc[0]["run_id"]
+
+    _model = mlflow.pyfunc.load_model(
+        model_uri=f"runs:/{run_id}/model"
+    )
+    _model_version = run_id
 
 
-# --------------------------------------------------
-# Public helpers
-# --------------------------------------------------
+def get_model():
+    global _model
+    if _model is None:
+        _load_latest_model_fallback()
+    return _model, _model_version
+
+
 def get_model_version():
-    """
-    Returns MLflow run_id (NOT sklearn metadata).
-    """
-    _, _, run_id = get_model()
-    return run_id
+    _, v = get_model()
+    return v
 
+
+# =========================
+# Prediction
+# =========================
 
 def predict_meal(features: dict, top_k: int = 3):
     """
-    Predict meal with top-k probabilities.
+    Predict meal using trained sklearn pipeline.
+
+    Parameters
+    ----------
+    features : dict
+        Quiz answers (categorical strings)
+    top_k : int
+        Reserved for future ranking models
+
+    Returns
+    -------
+    dict
     """
-    model, _, _ = get_model()
+    model, _ = get_model()
 
-    X = pd.DataFrame([features])
+    df = pd.DataFrame([features])
 
-    # Predict class
-    pred = model.predict(X)[0]
-
-    # Predict probabilities
-    proba = model.predict_proba(X)[0]
-    classes = model.named_steps["clf"].classes_
-
-    # Top-k
-    k = int(top_k)
-    top_idx = np.argsort(proba)[::-1][:k]
-
-    top = [
-        {"meal": str(classes[i]), "prob": float(proba[i])}
-        for i in top_idx
-    ]
+    # LogisticRegression pipeline → single label
+    prediction = model.predict(df)[0]
 
     return {
-        "recommended_meal": str(pred),
-        "top_k": top,
+        "recommended_meal": prediction,
+        "top_k": top_k,
     }
