@@ -11,7 +11,15 @@ st.set_page_config(
     layout="centered",
 )
 
-API = st.sidebar.text_input("API URL", "http://34.80.4.247")
+if "API_URL" not in st.session_state:
+    st.session_state.API_URL = "http://34.80.4.247"
+
+API = st.sidebar.text_input(
+    "API URL",
+    key="API_URL"
+)
+
+# API = 'http://34.80.4.247'
 
 st.title("🍜 What to Eat?")
 
