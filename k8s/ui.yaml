@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: what-to-eat-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: what-to-eat-ui
+  template:
+    metadata:
+      labels:
+        app: what-to-eat-ui
+    spec:
+      containers:
+        - name: ui
+          image: asia-east1-docker.pkg.dev/newtest-414721/mlops/what-to-eat-ui:latest
+          ports:
+            - containerPort: 8501
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: what-to-eat-ui
+spec:
+  type: LoadBalancer
+  selector:
+    app: what-to-eat-ui
+  ports:
+    - port: 80
+      targetPort: 8501
