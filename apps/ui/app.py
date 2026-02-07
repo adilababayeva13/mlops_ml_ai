@@ -11,7 +11,7 @@ st.set_page_config(
     layout="centered",
 )
 
-API = st.sidebar.text_input("API URL", "http://127.0.0.1:8000")
+API = st.sidebar.text_input("API URL", "http://34.80.4.247")
 
 st.title("🍜 What to Eat?")
 
